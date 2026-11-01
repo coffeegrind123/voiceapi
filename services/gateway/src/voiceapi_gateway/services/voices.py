@@ -36,6 +36,9 @@ class VoiceStatus:
 
 
 CLONE_MODES = ("auto", "icl", "xvector")
+# The voice used when a request names none (or an OpenAI preset). Stored in the gateway so it
+# survives every client session: a fresh agent with no history still speaks with it.
+DEFAULT_VOICE_SETTING = "default_voice_id"
 _NAME = re.compile(r"^[\w][\w .'\-]{0,62}$", re.UNICODE)
 MIN_TOTAL_SECONDS = 3.0
 
@@ -87,6 +90,7 @@ class VoiceService:
         language: str = "auto",
         clean: bool = True,
         mode: str = "auto",
+        make_default: bool = False,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         name = _validate_name(name)
         if mode not in CLONE_MODES:
@@ -126,18 +130,49 @@ class VoiceService:
             await self.db.insert("voice_sources", {"voice_id": voice_id, "file_id": source.id, "position": position})
         job = await self.jobs.submit(
             JobType.VOICE_BUILD,
-            {"voice_id": voice_id, "transcript": transcript, "language": language, "clean": clean, "mode": mode},
+            {"voice_id": voice_id, "transcript": transcript, "language": language, "clean": clean, "mode": mode,
+             "make_default": make_default},
             resource_id=voice_id,
         )
         return await self.get(voice_id), job
 
     async def get(self, voice_ref: str) -> dict[str, Any]:
-        return self.public(await self._row(voice_ref))
+        return self.public(await self._row(voice_ref), default_id=await self.default_voice_id())
 
     async def list(self, *, limit: int, after: str | None, status: str | None = None):
         where, params = ("status = ?", (status,)) if status else ("1=1", ())
         page = await self.db.page("voices", limit=limit, after=after, where=where, params=params)
-        return [self.public(row) for row in page.items], page.has_more
+        default_id = await self.default_voice_id()
+        return [self.public(row, default_id=default_id) for row in page.items], page.has_more
+
+    # ---- default voice ----------------------------------------------------------------
+
+    async def default_voice_id(self) -> str | None:
+        return await self.db.get_setting(DEFAULT_VOICE_SETTING)
+
+    async def default_voice(self) -> dict[str, Any] | None:
+        """The persisted default voice, or None. A default whose voice was removed is cleared."""
+        voice_id = await self.default_voice_id()
+        if voice_id is None:
+            return None
+        row = await self.db.fetch_one("SELECT * FROM voices WHERE id = ?", (voice_id,))
+        if row is None:
+            await self.db.set_setting(DEFAULT_VOICE_SETTING, None)
+            return None
+        return self.public(row, default_id=voice_id)
+
+    async def set_default(self, voice_ref: str | None) -> dict[str, Any] | None:
+        """Make a voice the default for every client, or clear it with None."""
+        if voice_ref is None or not voice_ref.strip():
+            await self.db.set_setting(DEFAULT_VOICE_SETTING, None)
+            return None
+        row = await self._row(voice_ref)
+        if row["status"] == VoiceStatus.FAILED:
+            raise ApiError(
+                409, ErrorCode.VOICE_NOT_READY, f"voice {row['id']} failed to build and cannot be the default"
+            )
+        await self.db.set_setting(DEFAULT_VOICE_SETTING, row["id"])
+        return self.public(row, default_id=row["id"])
 
     async def update(self, voice_ref: str, changes: dict[str, Any]) -> dict[str, Any]:
         row = await self._row(voice_ref)
@@ -168,6 +203,8 @@ class VoiceService:
         if row["status"] == VoiceStatus.READY:
             await self.engine.delete_voice(engine_voice_handle(row["id"]))
         await self.db.execute("DELETE FROM voices WHERE id = ?", (row["id"],))
+        if await self.default_voice_id() == row["id"]:
+            await self.db.set_setting(DEFAULT_VOICE_SETTING, None)
         if row["reference_file_id"]:
             try:
                 await self.files.delete(row["reference_file_id"])
@@ -218,11 +255,12 @@ class VoiceService:
     # ---- rendering ------------------------------------------------------------------
 
     @staticmethod
-    def public(row: dict[str, Any]) -> dict[str, Any]:
+    def public(row: dict[str, Any], *, default_id: str | None = None) -> dict[str, Any]:
         return {
             "id": row["id"],
             "object": "voice",
             "name": row["name"],
+            "is_default": row["id"] == default_id,
             "description": row["description"],
             "tags": loads(row["tags"], []),
             "status": row["status"],
@@ -329,8 +367,10 @@ class VoiceService:
                 "updated_at": time.time(),
             },
         )
+        if payload.get("make_default"):
+            await self.db.set_setting(DEFAULT_VOICE_SETTING, voice_id)
         voice = await self.get(voice_id)
         return {"voice": voice}
 
 
-__all__ = ["CLONE_MODES", "VoiceService", "VoiceStatus"]
+__all__ = ["CLONE_MODES", "DEFAULT_VOICE_SETTING", "VoiceService", "VoiceStatus"]

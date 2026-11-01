@@ -71,7 +71,8 @@ async def capabilities(request: Request) -> dict[str, Any]:
             "max_input_chars": limits.max_speech_input_chars,
             "sample_rate": audio.ENGINE_SAMPLE_RATE,
             "instructions": False,
-            "default_voice": get_state(request).settings.default_voice,
+            "default_voice": (await get_state(request).voices.default_voice() or {}).get("id")
+            or get_state(request).settings.default_voice,
         },
         "transcription": {
             "models": sorted(ASR_MODEL_IDS),

@@ -82,6 +82,13 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status, created_at);
 
+-- Gateway-wide preferences that must outlive every client session (e.g. the default voice).
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS idempotency (
     key TEXT NOT NULL,
     scope TEXT NOT NULL,
@@ -173,6 +180,22 @@ class Database:
             [*values, limit + 1],
         )
         return Page(items=rows[:limit], has_more=len(rows) > limit)
+
+    # ---- settings -------------------------------------------------------------------
+
+    async def get_setting(self, key: str) -> str | None:
+        row = await self.fetch_one("SELECT value FROM settings WHERE key = ?", (key,))
+        return None if row is None else row["value"]
+
+    async def set_setting(self, key: str, value: str | None) -> None:
+        if value is None:
+            await self.execute("DELETE FROM settings WHERE key = ?", (key,))
+            return
+        await self.execute(
+            "INSERT INTO settings(key, value, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            (key, value, time.time()),
+        )
 
     # ---- idempotency ----------------------------------------------------------------
 

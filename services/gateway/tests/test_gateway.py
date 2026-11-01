@@ -328,3 +328,63 @@ async def test_mcp_lists_and_calls_tools(harness: Harness) -> None:
     assert result.get("isError") is not True, result
     payload = result["structuredContent"]
     assert payload["id"].startswith("file_") and payload["url"].endswith("/content")
+
+
+# ---- default voice (persists across sessions) ----------------------------------------------
+
+
+async def test_make_default_on_create_and_speak_without_naming_a_voice(harness: Harness) -> None:
+    file_id = await _upload(harness)
+    created = await harness.client.post(
+        "/v1/voices?wait=30", json={"name": "Mine", "file_ids": [file_id], "make_default": True}
+    )
+    voice = created.json()["voice"]
+    assert voice["is_default"] is True
+    settings = (await harness.client.get("/v1/settings")).json()
+    assert settings["default_voice"]["id"] == voice["id"]
+    spoken = await harness.client.post("/v1/audio/speech", json={"input": "No voice named.", "response_format": "wav"})
+    assert spoken.status_code == 200, spoken.text
+    assert harness.engine.speech_requests[-1]["voice"] == engine_voice_handle(voice["id"])
+    preset = await harness.client.post(
+        "/v1/audio/speech", json={"input": "Hi.", "voice": "nova", "response_format": "wav"}
+    )
+    assert preset.status_code == 200
+    caps = (await harness.client.get("/v1/capabilities")).json()
+    assert caps["speech"]["default_voice"] == voice["id"]
+
+
+async def test_default_survives_a_gateway_restart(harness: Harness) -> None:
+    voice = await _ready_voice(harness, name="Keeper")
+    await harness.client.patch("/v1/settings", json={"default_voice": "Keeper"})
+    # A new service over the same database: what a fresh session after a restart sees.
+    from voiceapi_gateway.db import Database
+    from voiceapi_gateway.services.voices import DEFAULT_VOICE_SETTING
+
+    reopened = Database(harness.state.settings.db_path)
+    try:
+        assert await reopened.get_setting(DEFAULT_VOICE_SETTING) == voice["id"]
+    finally:
+        reopened.close()
+
+
+async def test_default_is_off_until_set_and_can_be_turned_off(harness: Harness) -> None:
+    await _ready_voice(harness, name="Plain")
+    assert (await harness.client.get("/v1/settings")).json()["default_voice"] is None
+    unnamed = await harness.client.post("/v1/audio/speech", json={"input": "x"})
+    assert unnamed.status_code == 422 and "default" in unnamed.json()["hint"]
+    on = await harness.client.patch("/v1/settings", json={"default_voice": "Plain"})
+    assert on.json()["default_voice"]["name"] == "Plain"
+    off = await harness.client.patch("/v1/settings", json={"default_voice": None})
+    assert off.json()["default_voice"] is None
+
+
+async def test_deleting_the_default_voice_clears_it(harness: Harness) -> None:
+    voice = await _ready_voice(harness, name="Gone", make_default=True)
+    assert (await harness.client.get(f"/v1/voices/{voice['id']}")).json()["is_default"] is True
+    await harness.client.delete(f"/v1/voices/{voice['id']}")
+    assert (await harness.client.get("/v1/settings")).json()["default_voice"] is None
+
+
+async def test_unknown_default_target_is_rejected(harness: Harness) -> None:
+    response = await harness.client.patch("/v1/settings", json={"default_voice": "nobody"})
+    assert response.status_code == 404 and response.json()["code"] == "voice_not_found"

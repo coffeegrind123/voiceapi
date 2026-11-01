@@ -43,7 +43,9 @@ class SpeechBody(BaseModel):
 
     model: str = "qwen3-tts-1.7b-base"
     input: Annotated[str, Field(min_length=1, description="Text to speak. Long text is chunked by sentence.")]
-    voice: Annotated[str, Field(description="Voice id (voice_…) or name. OpenAI preset names map to the default.")]
+    voice: str | None = Field(
+        None, description="Voice id (voice_…) or name. Omitted, or an OpenAI preset name, uses the default voice."
+    )
     response_format: audio.OutputFormat = audio.OutputFormat.MP3
     speed: Annotated[float, Field(ge=0.25, le=4.0)] = 1.0
     stream_format: Literal["audio", "sse"] = "audio"

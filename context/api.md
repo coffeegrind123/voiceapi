@@ -40,6 +40,7 @@ design record.
 | GET | /v1/voices/{id}/reference | the chosen cleaned reference audio |
 | POST | /v1/voices/{id}/preview | short speech sample |
 | GET | /v1/jobs/{id}, POST /v1/jobs/{id}/cancel, GET /v1/jobs | |
+| GET/PATCH | /v1/settings | `{"default_voice": id/name/null}`: persisted default voice for every client |
 | * | /mcp | MCP streamable HTTP (same auth) |
 | POST | /v1/chat/completions | optional passthrough to `VOICEAPI_CHAT_UPSTREAM` (Ovis "polish") |
 

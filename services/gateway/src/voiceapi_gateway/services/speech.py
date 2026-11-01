@@ -45,7 +45,7 @@ def normalize_language(value: str | None) -> str:
 @dataclass(frozen=True, slots=True)
 class SpeechRequest:
     text: str
-    voice: str
+    voice: str | None
     response_format: audio.OutputFormat = audio.OutputFormat.MP3
     speed: float = 1.0
     language: str = "auto"
@@ -78,17 +78,27 @@ class SpeechService:
         self.default_voice = default_voice
         self.max_input_chars = max_input_chars
 
-    async def _voice_row(self, voice: str) -> dict:
+    async def _fallback_ref(self) -> str | None:
+        """The persisted default voice, else the deployment's VOICEAPI_DEFAULT_VOICE."""
+        stored = await self.voices.default_voice()
+        return stored["id"] if stored else self.default_voice
+
+    async def _voice_row(self, voice: str | None) -> dict:
         ref = (voice or "").strip()
-        if not ref and self.default_voice:
-            ref = self.default_voice
         if not ref:
-            raise ApiError(422, ErrorCode.VALIDATION_FAILED, "voice is required", "Pass a voice id or name.")
+            ref = await self._fallback_ref() or ""
+        if not ref:
+            raise ApiError(
+                422, ErrorCode.VALIDATION_FAILED, "no voice given and no default voice is set",
+                "Pass a voice id or name, or set a default with PATCH /v1/settings {\"default_voice\": ...}.",
+            )
         try:
             return await self.voices.resolve_for_speech(ref)
         except ApiError as error:
-            if error.code is ErrorCode.VOICE_NOT_FOUND and ref.lower() in OPENAI_PRESET_VOICES and self.default_voice:
-                return await self.voices.resolve_for_speech(self.default_voice)
+            if error.code is ErrorCode.VOICE_NOT_FOUND and ref.lower() in OPENAI_PRESET_VOICES:
+                fallback = await self._fallback_ref()
+                if fallback:
+                    return await self.voices.resolve_for_speech(fallback)
             raise
 
     def _validate(self, request: SpeechRequest) -> list[str]:

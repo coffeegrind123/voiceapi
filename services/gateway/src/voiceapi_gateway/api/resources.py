@@ -96,6 +96,9 @@ class VoiceCreateBody(BaseModel):
     language: str = "auto"
     clean: bool = Field(True, description="Run NVIDIA RE-USE speech enhancement on the clips first.")
     mode: Literal["auto", "icl", "xvector"] = "auto"
+    make_default: bool = Field(
+        False, description="Make this the default voice for every client once it is built (persists)."
+    )
 
 
 class VoicePatchBody(BaseModel):
@@ -133,6 +136,7 @@ async def _voice_body_from_form(request: Request) -> tuple[VoiceCreateBody, dict
         "language": str(form.get("language") or "auto"),
         "clean": form_bool(form.get("clean"), default=True),
         "mode": str(form.get("mode") or "auto"),
+        "make_default": form_bool(form.get("make_default")),
     }
     try:
         return VoiceCreateBody(**payload), payload
@@ -219,6 +223,31 @@ async def preview_voice(voice_ref: str, request: Request, body: PreviewBody | No
         SpeechRequest(text=body.text[:500], voice=voice_ref, response_format=fmt, voice_mode=body.voice_mode)
     )
     return Response(data, media_type=MEDIA_TYPES[fmt])
+
+
+# ---- settings --------------------------------------------------------------------------
+
+
+class SettingsPatchBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    default_voice: str | None = Field(
+        ..., description="Voice id or name to use when a request names none; null turns the default off."
+    )
+
+
+@router.get("/settings", tags=["voices"], summary="Gateway-wide settings (default voice)")
+async def get_settings(request: Request) -> dict[str, Any]:
+    state = get_state(request)
+    return {"default_voice": await state.voices.default_voice(),
+            "deployment_default_voice": state.settings.default_voice}
+
+
+@router.patch("/settings", tags=["voices"], summary="Set or clear the default voice (persists for every client)")
+async def patch_settings(body: SettingsPatchBody, request: Request) -> dict[str, Any]:
+    state = get_state(request)
+    return {"default_voice": await state.voices.set_default(body.default_voice),
+            "deployment_default_voice": state.settings.default_voice}
 
 
 # ---- jobs ------------------------------------------------------------------------------

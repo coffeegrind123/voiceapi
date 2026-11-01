@@ -61,7 +61,7 @@ def _register_audio_tools(mcp: MCPServer, state: AppState, base_url: str) -> Non
     async def speak(
         *,
         text: str,
-        voice: str,
+        voice: str | None = None,
         format: str = "mp3",
         language: str = "auto",
         speed: float = 1.0,
@@ -69,7 +69,8 @@ def _register_audio_tools(mcp: MCPServer, state: AppState, base_url: str) -> Non
     ) -> dict[str, Any]:
         """Synthesize speech with a cloned voice and store it as a file.
 
-        voice: voice id (voice_...) or name from list_voices. format: mp3|opus|aac|flac|wav|pcm.
+        voice: voice id (voice_...) or name from list_voices; omit to use the default voice.
+        format: mp3|opus|aac|flac|wav|pcm.
         language: auto or a language name/ISO code. speed: 0.25-4.0. voice_mode: auto|icl|xvector.
         Returns file metadata with a download url and duration_s.
         """
@@ -139,21 +140,35 @@ def _register_voice_tools(mcp: MCPServer, state: AppState) -> None:
         clean: bool = True,
         mode: str = "auto",
         description: str = "",
+        make_default: bool = True,
     ) -> dict[str, Any]:
         """Clone a voice from 1-20 clips (5-15 s of clean single-speaker speech is ideal).
 
-        transcript only with one clip
-        (omit to auto-transcribe). clean runs RE-USE first. mode: auto|icl|xvector.
-        Returns {voice, job}; poll get_job(job.id) until succeeded.
+        transcript only with one clip (omit to auto-transcribe). clean runs RE-USE first.
+        mode: auto|icl|xvector. make_default (default true) makes it the voice every later session
+        uses when none is named, once built. Returns {voice, job}; poll get_job(job.id) until succeeded.
         """
         try:
             voice, job = await state.voices.create(
                 name=name, file_ids=file_ids, transcript=transcript, language=language,
-                clean=clean, mode=mode, description=description,
+                clean=clean, mode=mode, description=description, make_default=make_default,
             )
         except ApiError as error:
             raise _tool_error(error) from error
         return {"voice": voice, "job": job}
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_default_voice() -> dict[str, Any]:
+        """The voice used whenever a request names none. It persists across sessions and clients."""
+        return {"default_voice": await state.voices.default_voice()}
+
+    @mcp.tool(annotations=CREATES)
+    async def set_default_voice(*, voice: str | None) -> dict[str, Any]:
+        """Make a voice (id or name) the default for every session and client; pass null to turn it off."""
+        try:
+            return {"default_voice": await state.voices.set_default(voice)}
+        except ApiError as error:
+            raise _tool_error(error) from error
 
     @mcp.tool(annotations=READ_ONLY)
     async def list_voices(*, status: str | None = "ready", limit: int = 50) -> dict[str, Any]:
