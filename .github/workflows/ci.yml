@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: engine (lint + CPU tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: jlumbroso/free-disk-space@v2
+        with:
+          tool-cache: false
+          large-packages: false
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.12.2"
+      - name: Install system packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsndfile1 sox
+      - name: Sync locked environment (no CUDA kernels extra)
+        working-directory: engine
+        run: uv sync --frozen --extra codec --extra serving --extra test
+      - name: Ruff
+        working-directory: engine
+        run: uv run --frozen ruff check src tests
+      - name: Tests
+        working-directory: engine
+        run: uv run --frozen pytest -q
+
+  gateway:
+    name: gateway (lint + tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.12.2"
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install
+        working-directory: services/gateway
+        run: uv venv --python 3.12 && uv pip install -e ".[test]"
+      - name: Ruff
+        working-directory: services/gateway
+        run: uv run --no-sync ruff check src tests
+      - name: Tests
+        working-directory: services/gateway
+        run: uv run --no-sync pytest -q
+
+  worker:
+    name: audio worker (lint + CPU tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.12.2"
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libsndfile1
+      - name: Install (CPU torch 2.10)
+        working-directory: services/audio-worker
+        run: |
+          uv venv --python 3.12
+          uv pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.10.0" "torchaudio==2.10.0"
+          uv pip install -e ".[test]"
+      - name: Ruff
+        working-directory: services/audio-worker
+        run: uv run --no-sync ruff check src tests
+      - name: Tests
+        working-directory: services/audio-worker
+        run: uv run --no-sync pytest -q

@@ -1,0 +1,89 @@
+# voiceapi: agent-first voice service on one NVIDIA GPU (tuned for a 24 GB RTX 4090).
+#
+#   docker compose pull && docker compose up -d
+#   curl -H "Authorization: Bearer $KEY" http://localhost:8080/v1/capabilities
+#
+# Images are built by GitHub Actions (.github/workflows/images.yml). Only the gateway
+# publishes a port; the engine and worker are reachable on the compose network only.
+name: voiceapi
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
+
+services:
+  tts-engine:
+    <<: *gpu
+    image: ghcr.io/coffeegrind123/voiceapi-engine:${VOICEAPI_TAG:-main}
+    init: true
+    ipc: host
+    restart: unless-stopped
+    environment:
+      QWEN3_TTS_MODEL: Qwen/Qwen3-TTS-12Hz-1.7B-Base
+      QWEN3_TTS_PROFILE: ${VOICEAPI_ENGINE_PROFILE:-ada24g}
+      QWEN3_TTS_LOCAL_FILES_ONLY: ${VOICEAPI_OFFLINE:-0}
+      HF_TOKEN: ${HF_TOKEN:-}
+    command:
+      - --revision
+      - fd4b254389122332181a7c3db7f27e918eec64e3
+      - --allow-non-h100
+      - --voice-table-rows
+      - "${VOICEAPI_VOICE_TABLE_ROWS:-16384}"
+      - --max-active-requests
+      - "${VOICEAPI_ENGINE_MAX_ACTIVE:-16}"
+    volumes:
+      - engine-cache:/home/nari/.cache
+    ulimits:
+      nofile: { soft: 65536, hard: 65536 }
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 3s
+      start_period: 1800s
+      retries: 5
+
+  audio-worker:
+    <<: *gpu
+    image: ghcr.io/coffeegrind123/voiceapi-worker:${VOICEAPI_TAG:-main}
+    init: true
+    restart: unless-stopped
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      VOICEAPI_WORKER_PRELOAD_ASR: ${VOICEAPI_WORKER_PRELOAD_ASR:-1}
+      # Free the ASR stack's ~5 GB of VRAM after this many idle seconds (0 = keep loaded).
+      VOICEAPI_WORKER_ASR_IDLE_UNLOAD_S: ${VOICEAPI_WORKER_ASR_IDLE_UNLOAD_S:-0}
+    volumes:
+      - voiceapi-data:/data
+      - worker-cache:/cache
+
+  gateway:
+    image: ghcr.io/coffeegrind123/voiceapi-gateway:${VOICEAPI_TAG:-main}
+    init: true
+    restart: unless-stopped
+    depends_on:
+      - tts-engine
+      - audio-worker
+    ports:
+      - "${VOICEAPI_BIND:-0.0.0.0}:${VOICEAPI_PORT:-8080}:8080"
+    environment:
+      VOICEAPI_ENGINE_URL: http://tts-engine:8000
+      VOICEAPI_WORKER_URL: http://audio-worker:8001
+      VOICEAPI_API_KEYS: ${VOICEAPI_API_KEYS:-}
+      VOICEAPI_ALLOW_ANONYMOUS: ${VOICEAPI_ALLOW_ANONYMOUS:-0}
+      VOICEAPI_PUBLIC_BASE_URL: ${VOICEAPI_PUBLIC_BASE_URL:-}
+      VOICEAPI_DEFAULT_VOICE: ${VOICEAPI_DEFAULT_VOICE:-}
+      VOICEAPI_CHAT_UPSTREAM: ${VOICEAPI_CHAT_UPSTREAM:-}
+      VOICEAPI_CHAT_UPSTREAM_KEY: ${VOICEAPI_CHAT_UPSTREAM_KEY:-}
+      VOICEAPI_MCP_ALLOWED_HOSTS: ${VOICEAPI_MCP_ALLOWED_HOSTS:-}
+    volumes:
+      - voiceapi-data:/data
+
+volumes:
+  engine-cache:
+  worker-cache:
+  voiceapi-data:
