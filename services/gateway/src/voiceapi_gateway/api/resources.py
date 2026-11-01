@@ -96,7 +96,6 @@ class VoiceCreateBody(BaseModel):
     language: str = "auto"
     clean: bool = Field(True, description="Run NVIDIA RE-USE speech enhancement on the clips first.")
     mode: Literal["auto", "icl", "xvector"] = "auto"
-    consent: bool = Field(False, description="Must be true: you have the speaker's permission to clone this voice.")
 
 
 class VoicePatchBody(BaseModel):
@@ -134,7 +133,6 @@ async def _voice_body_from_form(request: Request) -> tuple[VoiceCreateBody, dict
         "language": str(form.get("language") or "auto"),
         "clean": form_bool(form.get("clean"), default=True),
         "mode": str(form.get("mode") or "auto"),
-        "consent": form_bool(form.get("consent")),
     }
     try:
         return VoiceCreateBody(**payload), payload

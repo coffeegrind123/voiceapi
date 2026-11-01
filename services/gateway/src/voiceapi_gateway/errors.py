@@ -20,7 +20,6 @@ class ErrorCode(StrEnum):
     JOB_NOT_FOUND = "job_not_found"
     VOICE_NOT_READY = "voice_not_ready"
     VOICE_NAME_TAKEN = "voice_name_taken"
-    CONSENT_REQUIRED = "consent_required"
     INSTRUCTIONS_UNSUPPORTED = "instructions_unsupported"
     UNSUPPORTED_FORMAT = "unsupported_format"
     UNSUPPORTED_MODEL = "unsupported_model"

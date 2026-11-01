@@ -87,13 +87,7 @@ class VoiceService:
         language: str = "auto",
         clean: bool = True,
         mode: str = "auto",
-        consent: bool = False,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        if not consent:
-            raise ApiError(
-                422, ErrorCode.CONSENT_REQUIRED, "consent must be true to create a voice",
-                "Set consent=true to confirm you have the speaker's permission to clone this voice.",
-            )
         name = _validate_name(name)
         if mode not in CLONE_MODES:
             raise ApiError(422, ErrorCode.VALIDATION_FAILED, f"mode must be one of {', '.join(CLONE_MODES)}")

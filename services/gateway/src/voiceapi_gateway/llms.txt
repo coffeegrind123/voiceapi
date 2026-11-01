@@ -21,11 +21,10 @@ POST /v1/audio/speech  {"input": "...", "voice": "<voice id or name>", "response
 ## Clone a voice (async)
 
 1. Upload clips: POST /v1/files (multipart field `file`) -> {"id": "file_..."}.
-2. POST /v1/voices {"name": "Narrator", "file_ids": ["file_..."], "consent": true}
-   - consent=true is mandatory: you confirm the speaker permitted cloning.
+2. POST /v1/voices {"name": "Narrator", "file_ids": ["file_..."]}
    - transcript: exact words, only with a single clip; omit to auto-transcribe.
    - clean (default true) runs RE-USE first; 5-15 s of clear single-speaker speech is ideal.
-   - Multipart also works: fields name, consent, and one or more `files`.
+   - Multipart also works: fields name and one or more `files`.
 3. Poll the job: GET /v1/jobs/{job_id}?wait=60 until status is "succeeded" (or "failed" with error.hint).
 4. Speak with voice "Narrator" or its id.
 

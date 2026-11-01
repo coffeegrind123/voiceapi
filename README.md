@@ -33,10 +33,10 @@ at startup.
 
 ```bash
 KEY=...; BASE=http://localhost:8080
-# 1. upload a clip and clone a voice (consent is mandatory)
+# 1. upload a clip and clone a voice
 FILE=$(curl -s -H "Authorization: Bearer $KEY" -F file=@me.wav $BASE/v1/files | jq -r .id)
 curl -s -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
-  -d "{\"name\":\"Me\",\"file_ids\":[\"$FILE\"],\"consent\":true}" "$BASE/v1/voices?wait=60"
+  -d "{\"name\":\"Me\",\"file_ids\":[\"$FILE\"]}" "$BASE/v1/voices?wait=60"
 # 2. speak
 curl -s -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
   -d '{"input":"Hello from my cloned voice.","voice":"Me","response_format":"mp3"}' \

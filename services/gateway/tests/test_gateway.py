@@ -22,7 +22,7 @@ async def _upload(h: Harness, seconds: float = 10.0, name: str = "clip.wav") -> 
 async def _ready_voice(h: Harness, name: str = "Narrator", **extra) -> dict:
     file_id = await _upload(h)
     response = await h.client.post(
-        "/v1/voices?wait=30", json={"name": name, "file_ids": [file_id], "consent": True, **extra}
+        "/v1/voices?wait=30", json={"name": name, "file_ids": [file_id], **extra}
     )
     assert response.status_code == 200, response.text
     body = response.json()
@@ -75,26 +75,23 @@ async def test_voice_build_cleans_transcribes_and_registers(harness: Harness) ->
     assert reference.status_code == 200 and reference.content.startswith(b"RIFF")
 
 
-async def test_voice_requires_consent_and_unique_name(harness: Harness) -> None:
-    file_id = await _upload(harness)
-    response = await harness.client.post("/v1/voices", json={"name": "A", "file_ids": [file_id]})
-    assert response.status_code == 422 and response.json()["code"] == "consent_required"
+async def test_voice_names_are_unique(harness: Harness) -> None:
     await _ready_voice(harness, name="Taken")
     file_id = await _upload(harness)
-    clash = await harness.client.post("/v1/voices", json={"name": "taken", "file_ids": [file_id], "consent": True})
+    clash = await harness.client.post("/v1/voices", json={"name": "taken", "file_ids": [file_id]})
     assert clash.status_code == 409 and clash.json()["code"] == "voice_name_taken"
 
 
 async def test_voice_rejects_too_little_audio(harness: Harness) -> None:
     file_id = await _upload(harness, seconds=1.0)
-    response = await harness.client.post("/v1/voices", json={"name": "Short", "file_ids": [file_id], "consent": True})
+    response = await harness.client.post("/v1/voices", json={"name": "Short", "file_ids": [file_id]})
     assert response.status_code == 422 and response.json()["code"] == "audio_too_short"
 
 
 async def test_multipart_voice_creation(harness: Harness) -> None:
     response = await harness.client.post(
         "/v1/voices?wait=30",
-        data={"name": "Inline", "consent": "true", "transcript": "exact words here"},
+        data={"name": "Inline", "transcript": "exact words here"},
         files=[("files", ("a.wav", wav_bytes(6), "audio/wav"))],
     )
     assert response.status_code == 200, response.text
@@ -103,7 +100,7 @@ async def test_multipart_voice_creation(harness: Harness) -> None:
 
 async def test_idempotent_voice_creation_replays(harness: Harness) -> None:
     file_id = await _upload(harness)
-    payload = {"name": "Once", "file_ids": [file_id], "consent": True}
+    payload = {"name": "Once", "file_ids": [file_id]}
     headers = {"Idempotency-Key": "abc-123"}
     first = await harness.client.post("/v1/voices", json=payload, headers=headers)
     second = await harness.client.post("/v1/voices", json=payload, headers=headers)

@@ -84,7 +84,6 @@ async def capabilities(request: Request) -> dict[str, Any]:
             "max_clips": limits.max_voice_clips,
             "max_total_seconds": limits.max_voice_total_seconds,
             "recommended_reference_seconds": [5, 15],
-            "consent_required": True,
             "cleaning": "nvidia/NVIDIA-NemotronLabs-RE-USE",
         },
         "enhance": {

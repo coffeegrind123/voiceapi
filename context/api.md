@@ -78,8 +78,7 @@ multipart: `file` (webm/opus, mp4/m4a, wav, mp3, ogg, flac), `model`,
 multipart or JSON:
 `name`, `description?`, `files[]` or `file_ids[]` (1–20 clips, total ≤ 30 min),
 `transcript?` (applies when exactly one clip), `language?`, `clean` (default
-true), `mode` (`auto|icl|xvector`, default auto), `consent` (must be `true`:
-the caller asserts they have the right to clone this voice).
+true), `mode` (`auto|icl|xvector`, default auto).
 
 Job result: voice with `reference: {duration_s, transcript, file_id}`,
 `quality: {snr_before_db, snr_after_db, alignment_confidence, clips_used}`,
@@ -90,7 +89,7 @@ Job result: voice with `reference: {duration_s, transcript, file_id}`,
 `speak(text, voice?, format?, language?) → {file_id, url, duration_s}`,
 `transcribe(file_id|url, language?) → {text, language, words?}`,
 `enhance_audio(file_id) → {file_id, url}`,
-`create_voice(name, file_ids, transcript?, consent) → {job_id}`,
+`create_voice(name, file_ids, transcript?) → {job_id}`,
 `list_voices()`, `get_voice(id)`, `delete_voice(id)`, `get_job(id)`,
 `upload_audio(base64, filename) → {file_id}` (for agents without HTTP upload).
 Audio is returned as URLs into `/v1/files/{id}/content`, never inline base64.

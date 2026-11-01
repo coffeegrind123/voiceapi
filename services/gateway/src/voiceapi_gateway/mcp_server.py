@@ -29,7 +29,7 @@ and speech cleanup (NVIDIA RE-USE).
 
 Typical flows:
 - Speak: list_voices -> speak(text, voice) -> download the returned url.
-- Clone: upload_audio (or use an existing file_id) -> create_voice(name, file_ids, consent=true)
+- Clone: upload_audio (or use an existing file_id) -> create_voice(name, file_ids)
   -> get_job(job_id, wait_seconds=60) until status is succeeded -> speak with the new voice.
 - Transcribe: upload_audio -> transcribe(file_id).
 Audio results are returned as file ids plus URLs (GET with the same bearer token); never inline.
@@ -134,7 +134,6 @@ def _register_voice_tools(mcp: MCPServer, state: AppState) -> None:
         *,
         name: str,
         file_ids: list[str],
-        consent: bool,
         transcript: str | None = None,
         language: str = "auto",
         clean: bool = True,
@@ -143,13 +142,13 @@ def _register_voice_tools(mcp: MCPServer, state: AppState) -> None:
     ) -> dict[str, Any]:
         """Clone a voice from 1-20 clips (5-15 s of clean single-speaker speech is ideal).
 
-        consent must be true: you confirm the speaker permitted cloning. transcript only with one clip
+        transcript only with one clip
         (omit to auto-transcribe). clean runs RE-USE first. mode: auto|icl|xvector.
         Returns {voice, job}; poll get_job(job.id) until succeeded.
         """
         try:
             voice, job = await state.voices.create(
-                name=name, file_ids=file_ids, consent=consent, transcript=transcript, language=language,
+                name=name, file_ids=file_ids, transcript=transcript, language=language,
                 clean=clean, mode=mode, description=description,
             )
         except ApiError as error:
