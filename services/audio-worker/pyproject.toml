@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools==80.9.0", "wheel==0.45.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voiceapi-worker"
+version = "0.1.0"
+description = "GPU audio worker: NVIDIA RE-USE speech enhancement, Qwen3-ASR transcription, ForcedAligner timestamps, clone-reference selection"
+requires-python = ">=3.12,<3.13"
+# torch / torchaudio come from the CUDA 13.0 index in the image (2.10.0+cu130) so the prebuilt
+# mamba_ssm selective-scan wheel matches; they are not pinned here to keep CPU test installs possible.
+dependencies = [
+    "fastapi==0.141.1",
+    "uvicorn==0.52.3",
+    "transformers==5.20.1",
+    "accelerate==1.15.0",
+    "safetensors==0.8.0",
+    "huggingface-hub==2.2.0",
+    "einops==0.8.2",
+    "numpy==2.3.5",
+    "soundfile==0.14.0",
+    "librosa==0.11.0",
+    "pyloudnorm==0.2.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1", "ruff==0.16.0", "httpx==0.28.1"]
+
+[project.scripts]
+voiceapi-worker = "voiceapi_worker.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "N", "PL", "W", "UP"]
+# N803/N806: the selective-scan math keeps the paper's A, B, C, D names.
+ignore = ["PLR0913", "PLR2004", "PLC0415", "N812", "N806", "N803"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
