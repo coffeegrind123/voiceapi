@@ -5,6 +5,10 @@
 #
 # Images are built by GitHub Actions (.github/workflows/images.yml). Only the gateway
 # publishes a port; the engine and worker are reachable on the compose network only.
+#
+# Model weights, uploads and generated audio live on VOICEAPI_STORAGE_DIR, a Docker
+# Desktop host path in //d/... form (a ./ or /home/... source mounts an empty directory
+# on Docker Desktop). Only the small SQLite catalogue stays in a named volume.
 name: voiceapi
 
 x-gpu: &gpu
@@ -37,7 +41,7 @@ services:
       - --max-active-requests
       - "${VOICEAPI_ENGINE_MAX_ACTIVE:-16}"
     volumes:
-      - engine-cache:/home/nari/.cache
+      - ${VOICEAPI_STORAGE_DIR:-//d/voiceapi}/engine-cache:/home/nari/.cache
     ulimits:
       nofile: { soft: 65536, hard: 65536 }
     healthcheck:
@@ -58,8 +62,8 @@ services:
       # Free the ASR stack's ~5 GB of VRAM after this many idle seconds (0 = keep loaded).
       VOICEAPI_WORKER_ASR_IDLE_UNLOAD_S: ${VOICEAPI_WORKER_ASR_IDLE_UNLOAD_S:-0}
     volumes:
-      - voiceapi-data:/data
-      - worker-cache:/cache
+      - ${VOICEAPI_STORAGE_DIR:-//d/voiceapi}/data:/data
+      - ${VOICEAPI_STORAGE_DIR:-//d/voiceapi}/worker-cache:/cache
 
   gateway:
     image: ghcr.io/coffeegrind123/voiceapi-gateway:${VOICEAPI_TAG:-main}
@@ -80,10 +84,11 @@ services:
       VOICEAPI_CHAT_UPSTREAM: ${VOICEAPI_CHAT_UPSTREAM:-}
       VOICEAPI_CHAT_UPSTREAM_KEY: ${VOICEAPI_CHAT_UPSTREAM_KEY:-}
       VOICEAPI_MCP_ALLOWED_HOSTS: ${VOICEAPI_MCP_ALLOWED_HOSTS:-}
+      VOICEAPI_DB_DIR: /db
     volumes:
-      - voiceapi-data:/data
+      - ${VOICEAPI_STORAGE_DIR:-//d/voiceapi}/data:/data
+      - voiceapi-db:/db
 
 volumes:
-  engine-cache:
-  worker-cache:
-  voiceapi-data:
+  voiceapi-db:
+    name: voiceapi-db

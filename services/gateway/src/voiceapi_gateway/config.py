@@ -73,6 +73,8 @@ class Settings:
     engine_url: str = "http://tts-engine:8000"
     worker_url: str = "http://audio-worker:8001"
     data_dir: Path = Path("/data")
+    # SQLite needs real file locking; keep it off Windows bind mounts (default: inside data_dir).
+    db_dir: Path | None = None
     public_base_url: str | None = None
     api_keys: frozenset[str] = field(default_factory=frozenset)
     allow_anonymous: bool = False
@@ -90,6 +92,7 @@ class Settings:
             engine_url=_env("VOICEAPI_ENGINE_URL", cls.engine_url) or cls.engine_url,
             worker_url=_env("VOICEAPI_WORKER_URL", cls.worker_url) or cls.worker_url,
             data_dir=Path(_env("VOICEAPI_DATA_DIR", str(cls.data_dir)) or "/data"),
+            db_dir=Path(db_dir) if (db_dir := _env("VOICEAPI_DB_DIR")) else None,
             public_base_url=_env("VOICEAPI_PUBLIC_BASE_URL"),
             api_keys=_load_api_keys(),
             allow_anonymous=_env_bool("VOICEAPI_ALLOW_ANONYMOUS", False),
@@ -119,7 +122,7 @@ class Settings:
 
     @property
     def db_path(self) -> Path:
-        return self.data_dir / "voiceapi.sqlite3"
+        return (self.db_dir or self.data_dir) / "voiceapi.sqlite3"
 
     @property
     def files_dir(self) -> Path:
