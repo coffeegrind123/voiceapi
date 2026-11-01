@@ -87,3 +87,38 @@ def test_ovis_language_list_semantics() -> None:
     assert pick_language(None, ["en", "de"]) is None
     assert pick_language("auto", []) is None
     assert pick_language("fr", ["fr"]) == "fr"
+
+
+def test_settings_from_environment_uses_real_defaults(monkeypatch) -> None:
+    from voiceapi_gateway.config import Settings
+
+    for name in ("VOICEAPI_ENGINE_URL", "VOICEAPI_WORKER_URL", "VOICEAPI_DATA_DIR", "VOICEAPI_DB_DIR",
+                 "VOICEAPI_API_KEYS", "VOICEAPI_API_KEYS_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("VOICEAPI_ALLOW_ANONYMOUS", "1")
+    settings = Settings.from_env()
+    assert settings.engine_url == "http://tts-engine:8000"
+    assert settings.worker_url == "http://audio-worker:8001"
+    assert str(settings.data_dir) == "/data" and settings.db_dir is None
+
+
+def test_settings_from_environment_reads_overrides(monkeypatch) -> None:
+    from voiceapi_gateway.config import Settings
+
+    monkeypatch.setenv("VOICEAPI_API_KEYS", "k" * 30)
+    monkeypatch.setenv("VOICEAPI_ENGINE_URL", "http://engine.test:9000")
+    monkeypatch.setenv("VOICEAPI_DB_DIR", "/db")
+    settings = Settings.from_env()
+    assert settings.engine_url == "http://engine.test:9000"
+    assert str(settings.db_path) == "/db/voiceapi.sqlite3"
+
+
+def test_limits_from_environment_are_integers(monkeypatch) -> None:
+    from voiceapi_gateway.config import Settings
+
+    monkeypatch.setenv("VOICEAPI_ALLOW_ANONYMOUS", "1")
+    for name in ("VOICEAPI_MAX_UPLOAD_BYTES", "VOICEAPI_MAX_SPEECH_CHARS", "VOICEAPI_JOB_WORKERS"):
+        monkeypatch.delenv(name, raising=False)
+    limits = Settings.from_env().limits
+    got = (limits.max_upload_bytes, limits.max_speech_input_chars, limits.job_workers)
+    assert got == (200 * 1024 * 1024, 100_000, 2)

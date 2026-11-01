@@ -54,25 +54,35 @@ def _load_api_keys() -> frozenset[str]:
     return frozenset(keys)
 
 
+# Defaults live in module constants: on a slots dataclass `Cls.field` is a slot descriptor, not
+# the default, so from_env must never read defaults off the class.
+DEFAULT_ENGINE_URL = "http://tts-engine:8000"
+DEFAULT_WORKER_URL = "http://audio-worker:8001"
+DEFAULT_DATA_DIR = "/data"
+DEFAULT_MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+DEFAULT_MAX_SPEECH_CHARS = 100_000
+DEFAULT_JOB_WORKERS = 2
+
+
 @dataclass(frozen=True, slots=True)
 class Limits:
-    max_upload_bytes: int = 200 * 1024 * 1024
+    max_upload_bytes: int = DEFAULT_MAX_UPLOAD_BYTES
     max_transcription_upload_bytes: int = 100 * 1024 * 1024
-    max_speech_input_chars: int = 100_000
+    max_speech_input_chars: int = DEFAULT_MAX_SPEECH_CHARS
     max_voice_clips: int = 20
     max_voice_total_seconds: float = 30 * 60
     max_sync_enhance_seconds: float = 30.0
     max_form_fields: int = 32
     max_wait_seconds: float = 60.0
     idempotency_ttl_seconds: int = 24 * 3600
-    job_workers: int = 2
+    job_workers: int = DEFAULT_JOB_WORKERS
 
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    engine_url: str = "http://tts-engine:8000"
-    worker_url: str = "http://audio-worker:8001"
-    data_dir: Path = Path("/data")
+    engine_url: str = DEFAULT_ENGINE_URL
+    worker_url: str = DEFAULT_WORKER_URL
+    data_dir: Path = Path(DEFAULT_DATA_DIR)
     # SQLite needs real file locking; keep it off Windows bind mounts (default: inside data_dir).
     db_dir: Path | None = None
     public_base_url: str | None = None
@@ -89,9 +99,9 @@ class Settings:
     @classmethod
     def from_env(cls) -> Settings:
         settings = cls(
-            engine_url=_env("VOICEAPI_ENGINE_URL", cls.engine_url) or cls.engine_url,
-            worker_url=_env("VOICEAPI_WORKER_URL", cls.worker_url) or cls.worker_url,
-            data_dir=Path(_env("VOICEAPI_DATA_DIR", str(cls.data_dir)) or "/data"),
+            engine_url=_env("VOICEAPI_ENGINE_URL", DEFAULT_ENGINE_URL) or DEFAULT_ENGINE_URL,
+            worker_url=_env("VOICEAPI_WORKER_URL", DEFAULT_WORKER_URL) or DEFAULT_WORKER_URL,
+            data_dir=Path(_env("VOICEAPI_DATA_DIR", DEFAULT_DATA_DIR) or DEFAULT_DATA_DIR),
             db_dir=Path(db_dir) if (db_dir := _env("VOICEAPI_DB_DIR")) else None,
             public_base_url=_env("VOICEAPI_PUBLIC_BASE_URL"),
             api_keys=_load_api_keys(),
@@ -101,9 +111,9 @@ class Settings:
             chat_upstream_key=_env("VOICEAPI_CHAT_UPSTREAM_KEY"),
             mcp_allowed_hosts=_env_list("VOICEAPI_MCP_ALLOWED_HOSTS"),
             limits=Limits(
-                max_upload_bytes=_env_int("VOICEAPI_MAX_UPLOAD_BYTES", Limits.max_upload_bytes),
-                max_speech_input_chars=_env_int("VOICEAPI_MAX_SPEECH_CHARS", Limits.max_speech_input_chars),
-                job_workers=_env_int("VOICEAPI_JOB_WORKERS", Limits.job_workers),
+                max_upload_bytes=_env_int("VOICEAPI_MAX_UPLOAD_BYTES", DEFAULT_MAX_UPLOAD_BYTES),
+                max_speech_input_chars=_env_int("VOICEAPI_MAX_SPEECH_CHARS", DEFAULT_MAX_SPEECH_CHARS),
+                job_workers=_env_int("VOICEAPI_JOB_WORKERS", DEFAULT_JOB_WORKERS),
             ),
         )
         settings.validate()
