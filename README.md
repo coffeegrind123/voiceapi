@@ -48,6 +48,17 @@ curl -s -H "Authorization: Bearer $KEY" -F file=@hello.mp3 $BASE/v1/audio/transc
 Agents: point MCP clients at `$BASE/mcp` (streamable HTTP, same bearer token), or read
 `$BASE/llms.txt`. OpenAI SDKs work with `base_url=$BASE/v1`.
 
+## Clients
+
+| client | wiring |
+|---|---|
+| Ovis (dictation) | `OVIS_OPENAI_BASE_URL=http://<host>:8080/v1`, `OVIS_OPENAI_API_KEY=<key>`. The gateway accepts Ovis's multipart shape (`languages[]`, `stream=true`) and answers with `transcript.text.delta` / `transcript.text.done` SSE. Set `VOICEAPI_CHAT_UPSTREAM` if you want Ovis's transcript "polish" step to work too. |
+| Codex CLI | `~/.codex/config.toml`: `[mcp_servers.voice]` with `url = "http://<host>:8080/mcp"` and `bearer_token_env_var = "VOICEAPI_KEY"`. |
+| pi | `mcp.json`: `{"mcpServers": {"voice": {"url": "http://<host>:8080/mcp", "headers": {"Authorization": "Bearer ${VOICEAPI_KEY}"}}}}`, or `pi mcp add voice --url http://<host>:8080/mcp --bearer-token-env-var VOICEAPI_KEY` |
+| OpenAI SDKs | `OpenAI(base_url="http://<host>:8080/v1", api_key="<key>")`; `audio.speech.create(model="tts-1", voice="<voice name>", input=...)` |
+
+`context/integrations.md` has the research behind these, including read-aloud hook options.
+
 ## Layout
 
 | path | what |
