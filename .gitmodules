@@ -1,0 +1,3 @@
+[submodule "engine"]
+	path = engine
+	url = https://github.com/coffeegrind123/nari-qwen3-tts.git
