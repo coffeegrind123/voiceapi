@@ -7,14 +7,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
     UV_NO_CACHE=1 \
     VIRTUAL_ENV=/opt/gateway \
     PATH=/opt/gateway/bin:${PATH} \
-    VOICEAPI_DATA_DIR=/data
+    VOICEAPI_DATA_DIR=/data \
+    VOICEAPI_DB_DIR=/db
 
 # Debian's ffmpeg ships libmp3lame and libopus for the mp3/opus response formats.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 2000 --gid 0 --create-home --shell /bin/bash gateway \
-    && mkdir -p /data && chown -R 2000:0 /data && chmod -R g+rwX /data
+    && mkdir -p /data /db && chown -R 2000:0 /data /db && chmod -R g+rwX /data /db
 
 COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /opt/src

@@ -87,3 +87,15 @@ jobs:
             size=$(docker image inspect -f '{{.Size}}' "$ref")
             echo "${image}: $((size / 1000000)) MB" | tee -a "$GITHUB_STEP_SUMMARY"
           done
+      - name: Gateway starts as its unprivileged user on fresh volumes
+        run: |
+          ref="ghcr.io/${{ github.repository_owner }}/voiceapi-gateway:sha-${{ github.sha }}"
+          docker volume create smoke-db >/dev/null
+          docker run -d --name smoke-gateway -p 18080:8080 -e VOICEAPI_ALLOW_ANONYMOUS=1 \
+            -v smoke-db:/db "$ref" >/dev/null
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:18080/health && exit 0
+            sleep 1
+          done
+          docker logs smoke-gateway
+          exit 1
