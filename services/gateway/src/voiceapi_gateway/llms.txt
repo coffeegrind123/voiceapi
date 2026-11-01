@@ -1,0 +1,49 @@
+# voiceapi
+
+> Self-hosted voice service for agents: text-to-speech with cloned voices (Qwen3-TTS 1.7B Base),
+> speech-to-text (Qwen3-ASR 1.7B), and speech cleanup (NVIDIA NemotronLabs RE-USE).
+> OpenAI-compatible where OpenAI has an equivalent. Base URL: {BASE_URL}
+
+Auth: send `Authorization: Bearer <api key>` on every call except /health, /ready, /llms.txt, /openapi.json.
+Errors: RFC 9457 JSON with `code` (stable, machine-matchable) and `hint` (what to do next).
+Full contract: {BASE_URL}/openapi.json. Limits and options: GET {BASE_URL}/v1/capabilities.
+MCP (streamable HTTP, same bearer token): {BASE_URL}/mcp
+
+## Speak
+
+POST /v1/audio/speech  {"input": "...", "voice": "<voice id or name>", "response_format": "mp3"}
+- Formats: mp3, opus, aac, flac, wav, pcm (24 kHz mono s16le). Streams as it generates.
+- Optional: language (auto or a language name / ISO code), speed 0.25-4.0, voice_mode auto|icl|xvector,
+  seed, temperature, stream_format "sse", save=true (store and return a file with a URL instead of audio).
+- `instructions` is rejected: cloned voices take their style from the reference recording.
+- Long text is split by sentence automatically.
+
+## Clone a voice (async)
+
+1. Upload clips: POST /v1/files (multipart field `file`) -> {"id": "file_..."}.
+2. POST /v1/voices {"name": "Narrator", "file_ids": ["file_..."], "consent": true}
+   - consent=true is mandatory: you confirm the speaker permitted cloning.
+   - transcript: exact words, only with a single clip; omit to auto-transcribe.
+   - clean (default true) runs RE-USE first; 5-15 s of clear single-speaker speech is ideal.
+   - Multipart also works: fields name, consent, and one or more `files`.
+3. Poll the job: GET /v1/jobs/{job_id}?wait=60 until status is "succeeded" (or "failed" with error.hint).
+4. Speak with voice "Narrator" or its id.
+
+GET /v1/voices lists voices; GET /v1/voices/{id} shows reference transcript and quality;
+POST /v1/voices/{id}/preview speaks a sample; DELETE removes it.
+
+## Transcribe
+
+POST /v1/audio/transcriptions (multipart): file, model (optional), language or languages[], prompt,
+response_format json|text|verbose_json|srt|vtt, timestamp_granularities[]=word, stream=true for SSE
+(`transcript.text.delta` then `transcript.text.done`).
+
+## Clean audio
+
+POST /v1/audio/enhance {"file_id": "file_..."} -> cleaned WAV file (job for clips over 30 s; ?wait=60 blocks).
+
+## Conventions
+
+- Idempotency-Key header on POSTs that create things makes retries safe.
+- Long-running calls return 202 with a job; ?wait=N (<= 60) blocks up to N seconds.
+- Generated files expire after 7 days; voice references persist with their voice.
