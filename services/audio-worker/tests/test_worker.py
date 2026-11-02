@@ -252,3 +252,18 @@ def test_missing_input_is_reported(client) -> None:
     test_client, root = client
     response = test_client.post("/v1/transcribe", json={"input_path": str(root / "nope.wav")})
     assert response.status_code == 422 and response.json()["code"] == "file_not_found"
+
+
+@needs_ffmpeg
+def test_snr_after_is_comparable_to_before(tmp_path: Path) -> None:
+    # Trimming leading/trailing silence removes the quiet frames the blind estimate uses as its
+    # noise floor; measuring "after" on trimmed audio reported a drop for unchanged audio.
+    rate = 16_000
+    rng = np.random.default_rng(3)
+    speech = _voiced(4.0, rate, pause_every=1.0)
+    padded = np.concatenate([np.zeros(rate), speech, np.zeros(rate)])
+    noisy = (padded + 0.0003 * rng.standard_normal(len(padded))).astype(np.float32)  # edges below -40 dB: trimmed
+    path = tmp_path / "clip.wav"
+    write_wav(path, noisy, rate)
+    clip = reference_module.clean_clip(path, enhancer=None)
+    assert abs(clip.snr_after - clip.snr_before) < 1.5, (clip.snr_before, clip.snr_after)

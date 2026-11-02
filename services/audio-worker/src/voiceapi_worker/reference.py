@@ -80,8 +80,11 @@ def clean_clip(path: Path, enhancer: ReuseEnhancer | None) -> CleanClip:
         work_rate = nearest_supported_rate(rate, SUPPORTED_RATES)
         audio = enhancer.enhance(resample(audio, rate, work_rate), work_rate)
         rate = work_rate
+    # Measure before trimming, over the same span as snr_before: trimming removes the quiet edges the
+    # blind estimate uses as its noise floor, which reported a false drop (51 dB on unchanged audio).
+    snr_after = snr_estimate_db(audio, rate)
     audio = normalize_loudness(_trim(audio), rate)
-    return CleanClip(audio=audio, rate=rate, snr_before=snr_before, snr_after=snr_estimate_db(audio, rate))
+    return CleanClip(audio=audio, rate=rate, snr_before=snr_before, snr_after=snr_after)
 
 
 def _locate_words(transcript: str, words: list[dict]) -> list[tuple[int, int]] | None:
